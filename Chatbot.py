@@ -17,15 +17,20 @@ load_dotenv()
 
 # Configure Tesseract path - confirmed by user in Step 172
 tesseract_cmd_path = r'C:\Program Files\Sejda PDF Desktop\resources\vendor\tesseract-windows-x64\tesseract.exe'
-tessdata_path = r'C:\Program Files\Sejda PDF Desktop\resources\vendor\tessdata'
+# Tesseract looks for $TESSDATA_PREFIX/tessdata/
+tessdata_prefix = r'C:\Program Files\Sejda PDF Desktop\resources\vendor'
 
 if os.path.exists(tesseract_cmd_path):
     pytesseract.pytesseract.tesseract_cmd = tesseract_cmd_path
-    # Set TESSDATA_PREFIX - normalize slashes and ensure no quotes
-    os.environ['TESSDATA_PREFIX'] = tessdata_path.replace('\\', '/')
+    os.environ['TESSDATA_PREFIX'] = tessdata_prefix
     tesseract_found = True
 else:
     tesseract_found = False
+    # Fallback to standard check
+    standard_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    if os.path.exists(standard_path):
+        pytesseract.pytesseract.tesseract_cmd = standard_path
+        tesseract_found = True
 
 # Cache the embedding model to avoid reloading it (500MB+) on every interaction
 @st.cache_resource
@@ -37,7 +42,9 @@ def get_pdf_text(pdf_docs):
     for pdf in pdf_docs:
         pdf_reader = PdfReader(pdf)
         for page in pdf_reader.pages:
-            text += page.extract_text()
+            content = page.extract_text()
+            if content:
+                text += content + "\n"
     return text
 
 def get_docx_text(docx_file):
@@ -53,14 +60,10 @@ def get_excel_text(excel_file):
 
 def get_image_text(image_file):
     if not tesseract_found:
-        return "[OCR Error: Tesseract not detected]"
-    try:
-        img = Image.open(image_file)
-        # Rely on TESSDATA_PREFIX environment variable set above
-        text = pytesseract.image_to_string(img)
-        return text
-    except Exception as e:
-        return f"[OCR Error: {e}]"
+        raise Exception("Tesseract OCR not detected")
+    img = Image.open(image_file)
+    text = pytesseract.image_to_string(img)
+    return text
 
 def get_txt_text(txt_file):
     try:
@@ -164,6 +167,7 @@ def main():
                             else:
                                 process_log.append(f"⚠️ {file.name}: No text found or extraction failed")
                         except Exception as e:
+                            # We DON'T add the error message to raw_text anymore
                             process_log.append(f"❌ {file.name}: Error - {str(e)}")
                     
                     for log in process_log:
