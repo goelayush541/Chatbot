@@ -75,7 +75,7 @@ def get_txt_text(txt_file):
             return ""
 
 def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_text(text)
     return chunks
 
@@ -114,12 +114,17 @@ def user_input(user_question, api_key):
     docs = st.session_state.vector_store.similarity_search(user_question)
     chain = get_conversational_chain(api_key)
 
-    response = chain.invoke(
-        {"input_documents": docs, "question": user_question},
-        return_only_outputs=True
-    )
-
-    st.write("Reply: ", response["output_text"])
+    try:
+        response = chain.invoke(
+            {"input_documents": docs, "question": user_question},
+            return_only_outputs=True
+        )
+        st.write("Reply: ", response["output_text"])
+    except Exception as e:
+        if "rate_limit_exceeded" in str(e).lower():
+            st.error("Groq API Rate Limit Hit. Please wait a moment before asking again, or check your API usage limits.")
+        else:
+            st.error(f"An error occurred: {e}")
 
 def main():
     st.set_page_config(page_title="Chatbot")
